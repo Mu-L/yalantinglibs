@@ -56,6 +56,8 @@ Lazy<std::shared_ptr<coro_rpc_client>> create_client(
   co_return client;
 }
 
+void show(auto& s) { return; }
+
 TEST_CASE("testing client") {
   {
     coro_rpc::coro_rpc_client client;
@@ -72,9 +74,9 @@ TEST_CASE("testing client") {
   std::string port = std::to_string(coro_rpc_server_port);
   asio::io_context io_context;
   std::promise<void> promise;
+  auto worker = std::make_unique<asio::io_context::work>(io_context);
   auto future = promise.get_future();
   std::thread thd([&io_context, &promise] {
-    asio::io_context::work work(io_context);
     promise.set_value();
     io_context.run();
   });
@@ -82,12 +84,12 @@ TEST_CASE("testing client") {
   future.wait();
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef YLT_ENABLE_SSL
-  server.init_ssl_context(
+  server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
   auto res = server.async_start();
 
-  CHECK_MESSAGE(res, "server start failed");
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
 
   SUBCASE("call rpc, function not registered") {
     g_action = {};
@@ -116,7 +118,7 @@ TEST_CASE("testing client") {
     g_action = {};
     auto f = [&io_context, &port]() -> Lazy<void> {
       auto client = co_await create_client(io_context, port);
-      auto ret = co_await client->template call_for<hello_timeout>(20ms);
+      auto ret = co_await client->template call_for<hello_timeout>(10ms);
       CHECK_MESSAGE(ret.error().code == coro_rpc::errc::timed_out,
                     ret.error().msg);
       co_return;
@@ -146,6 +148,7 @@ TEST_CASE("testing client") {
       std::string arg;
       arg.resize(2048);
       auto ret = co_await client->template call<large_arg_fun>(arg);
+      show(ret);
       CHECK(ret.value() == arg);
       co_return;
     };
@@ -154,7 +157,7 @@ TEST_CASE("testing client") {
   }
 
   server.stop();
-  io_context.stop();
+  worker = nullptr;
   thd.join();
 }
 
@@ -163,17 +166,17 @@ TEST_CASE("testing client with inject server") {
   std::string port = std::to_string(coro_rpc_server_port);
   ELOGV(INFO, "inject server port: %d", port.data());
   asio::io_context io_context;
+  auto worker = std::make_unique<asio::io_context::work>(io_context);
   std::thread thd([&io_context] {
-    asio::io_context::work work(io_context);
     io_context.run();
   });
   coro_rpc_server server(2, coro_rpc_server_port);
 #ifdef YLT_ENABLE_SSL
-  server.init_ssl_context(
+  server.init_ssl(
       ssl_configure{"../openssl_files", "server.crt", "server.key"});
 #endif
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start failed");
+  CHECK_MESSAGE(!res.hasResult(), "server start failed");
 
   server.register_handler<hello>();
 
@@ -205,6 +208,7 @@ TEST_CASE("testing client with inject server") {
       auto client = co_await create_client(io_context, port);
       g_action = inject_action::close_socket_after_send_length;
       auto ret = co_await client->template call<hello>();
+      show(ret);
       REQUIRE_MESSAGE(ret.error().code == coro_rpc::errc::io_error,
                       ret.error().msg);
     };
@@ -212,7 +216,7 @@ TEST_CASE("testing client with inject server") {
   }
 
   server.stop();
-  io_context.stop();
+  worker = nullptr;
   thd.join();
   g_action = inject_action::nothing;
 }
@@ -238,22 +242,22 @@ class SSLClientTester {
     inject("server key", server_key_path, server_key);
     inject("dh", dh_path, dh);
     ssl_configure config{base_path, server_crt_path, server_key_path, dh_path};
-    server.init_ssl_context(config);
+    server.init_ssl(config);
     server.template register_handler<hi>();
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
 
     std::promise<void> promise;
     auto future = promise.get_future();
+    worker = std::make_unique<asio::io_context::work>(io_context);
     thd = std::thread([this, &promise] {
-      asio::io_context::work work(io_context);
       promise.set_value();
       io_context.run();
     });
     future.wait();
   }
   ~SSLClientTester() {
-    io_context.stop();
+    worker = nullptr;
     thd.join();
   }
   void inject(std::string msg, std::string& path, ssl_type type) {
@@ -342,6 +346,7 @@ class SSLClientTester {
   ssl_type dh;
   asio::io_context io_context;
   std::thread thd;
+  std::unique_ptr<asio::io_context::work> worker;
 };
 
 TEST_CASE("testing client with ssl server") {
@@ -366,7 +371,7 @@ TEST_CASE("testing client with eof") {
   coro_rpc_server server(2, 8801);
 
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
@@ -388,7 +393,7 @@ TEST_CASE("testing client with attachment") {
   coro_rpc_server server(2, 8801);
 
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
@@ -409,18 +414,40 @@ TEST_CASE("testing client with attachment") {
   CHECK(client.get_resp_attachment() == "");
 }
 
+TEST_CASE("testing std::string_view") {
+  g_action = {};
+  coro_rpc_server server(1, 8801);
+
+  auto res = server.async_start();
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
+  coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
+  auto ec = client.sync_connect("127.0.0.1", "8801");
+  REQUIRE_MESSAGE(!ec, ec.message());
+
+  server.register_handler<test_string_view>();
+
+  auto ret = client.sync_call<test_string_view>("123");
+  CHECK(ret.value() == "123OK");
+
+  ret = client.sync_call<test_string_view>("1231232132123123");
+  CHECK(ret.value() == "1231232132123123OK");
+
+  ret = client.sync_call<test_string_view>("ABDD");
+  CHECK(ret.value() == "ABDDOK");
+}
+
 TEST_CASE("testing client with context response user-defined error") {
   g_action = {};
   coro_rpc_server server(2, 8801);
   auto res = server.async_start();
-  REQUIRE_MESSAGE(res, "server start failed");
+  REQUIRE_MESSAGE(!res.hasResult(), "server start failed");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE(!ec);
   server.register_handler<error_with_context, hello>();
   auto ret = client.sync_call<error_with_context>();
   REQUIRE(!ret.has_value());
-  CHECK(ret.error().code == coro_rpc::errc{104});
+  CHECK(ret.error().code == coro_rpc::errc{1004});
   CHECK(ret.error().msg == "My Error.");
   CHECK(client.has_closed() == false);
   auto ret2 = client.sync_call<hello>();
@@ -432,7 +459,7 @@ TEST_CASE("testing client with shutdown") {
   g_action = {};
   coro_rpc_server server(2, 8801);
   auto res = server.async_start();
-  CHECK_MESSAGE(res, "server start timeout");
+  CHECK_MESSAGE(!res.hasResult(), "server start timeout");
   coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
   auto ec = client.sync_connect("127.0.0.1", "8801");
   REQUIRE_MESSAGE(!ec, ec.message());
@@ -453,14 +480,76 @@ TEST_CASE("testing client with shutdown") {
   g_action = {};
 }
 TEST_CASE("testing client timeout") {
-  // SUBCASE("connect, 0ms timeout") {
-  //   coro_rpc_client client;
-  //   auto ret = client.connect("127.0.0.1", "8801", 0ms);
-  //   auto val = syncAwait(ret);
+  coro_rpc_server server(2, 8801);
+  server.register_handler<hello, client_hello>();
+  auto res = server.async_start();
+  CHECK_MESSAGE(!res.hasResult(), "server start timeout");
 
-  //   CHECK_MESSAGE(val == std::errc::timed_out,
-  //   make_error_code(val).message());
-  // }
+  SUBCASE("connect, 0ms connect timeout") {
+    coro_rpc_client client;
+    coro_rpc_client::config config{};
+    config.connect_timeout_duration = 0ms;
+    bool r = client.init_config(config);
+    CHECK(r);
+    auto ret = client.connect(
+        "127.0.0.1", "8801",
+        1000ms);  // this arg won't update config connect timeout duration.
+    auto val = syncAwait(ret);
+
+    if (val) {
+      CHECK_MESSAGE(val == coro_rpc::errc::timed_out, val.message());
+    }
+  }
+  SUBCASE("connect, -1ms never timeout") {
+    coro_rpc_client client;
+    coro_rpc_client::config config{};
+    config.connect_timeout_duration = -1ms;  // less than 0, no timeout
+                                             // checking.
+    bool r = client.init_config(config);
+    CHECK(r);
+    auto ret = client.connect(
+        "127.0.0.1", "8801",
+        1000ms);  // this arg won't update config connect timeout duration.
+    auto val = syncAwait(ret);
+
+    CHECK(!val);
+  }
+
+  SUBCASE("connect, 0ms request timeout") {
+    coro_rpc_client client;
+    coro_rpc_client::config config{};
+    config.connect_timeout_duration = 1000ms;
+    config.request_timeout_duration = 0ms;
+    bool r = client.init_config(config);
+    CHECK(r);
+    auto ret = client.connect(
+        "127.0.0.1", "8801",
+        0ms);  // 0ms won't cover config connect timeout duration.
+    auto val = syncAwait(ret);
+
+    CHECK(!val);
+    auto result = syncAwait(client.call<hello>());
+
+    if (result.has_value()) {
+      std::cout << result.value() << std::endl;
+    }
+    else {
+      CHECK_MESSAGE(result.error().code == coro_rpc::errc::timed_out,
+                    result.error().msg);
+    }
+  }
+  SUBCASE("connect, -1ms never request timeout") {
+    coro_rpc_client client;
+    client.get_config().request_timeout_duration =
+        -1ms;  // less than 0, never timeout.
+    auto ret = client.connect("127.0.0.1", "8801");
+    auto val = syncAwait(ret);
+
+    CHECK(!val);
+    auto result = syncAwait(client.call<hello>());
+
+    CHECK(result.has_value());
+  }
   SUBCASE("connect, ip timeout") {
     g_action = {};
     // https://stackoverflow.com/questions/100841/artificially-create-a-connection-timeout-error
@@ -497,7 +586,7 @@ TEST_CASE("testing client sync connect, unit test inject only") {
     g_action = {};
     coro_rpc_server server(2, 8801);
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client2(*coro_io::get_global_executor(), g_client_id++);
     bool ok = client2.init_ssl("../openssl_files", "server.crt");
     CHECK(ok == true);
@@ -532,7 +621,7 @@ TEST_CASE("testing client call timeout") {
     server.register_handler<hello_timeout>();
     server.register_handler<hi>();
     auto res = server.async_start();
-    CHECK_MESSAGE(res, "server start timeout");
+    CHECK_MESSAGE(!res.hasResult(), "server start timeout");
     coro_rpc_client client(*coro_io::get_global_executor(), g_client_id++);
     auto ec_lazy = client.connect("127.0.0.1", "8801");
     auto ec = syncAwait(ec_lazy);
