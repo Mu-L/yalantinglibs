@@ -9,7 +9,7 @@ struct Base {
   friend bool operator==(const Base& a, const Base& b) { return a.id == b.id; }
   virtual ~Base(){};
 };
-STRUCT_PACK_REFL(Base, id);
+YLT_REFL(Base, id);
 struct foo : public Base {
   std::string hello = "1";
   std::string hi = "2";
@@ -18,7 +18,7 @@ struct foo : public Base {
     return a.id == b.id && a.hello == b.hello && a.hi == b.hi;
   }
 };
-STRUCT_PACK_REFL(foo, id, hello, hi);
+YLT_REFL(foo, id, hello, hi);
 struct foo2 : public Base {
   std::string hello = "1";
   std::string hi = "2";
@@ -28,7 +28,7 @@ struct foo2 : public Base {
   }
   static constexpr int struct_pack_id = 114514;
 };
-STRUCT_PACK_REFL(foo2, id, hello, hi);
+YLT_REFL(foo2, id, hello, hi);
 struct foo3 : public Base {
   std::string hello = "1";
   std::string hi = "2";
@@ -37,7 +37,7 @@ struct foo3 : public Base {
     return a.id == b.id && a.hello == b.hello && a.hi == b.hi;
   }
 };
-STRUCT_PACK_REFL(foo3, id, hello, hi);
+YLT_REFL(foo3, id, hello, hi);
 struct foo4 : public Base {
   std::string hello = "1";
   std::string hi = "2";
@@ -47,7 +47,7 @@ struct foo4 : public Base {
   }
 };
 constexpr int struct_pack_id(foo4*) { return 112233211; }
-STRUCT_PACK_REFL(foo4, id, hello, hi);
+YLT_REFL(foo4, id, hello, hi);
 struct bar : public Base {
   int oh = 1;
   int no = 2;
@@ -56,7 +56,7 @@ struct bar : public Base {
     return a.id == b.id && a.oh == b.oh && a.no == b.no;
   }
 };
-STRUCT_PACK_REFL(bar, id, oh, no);
+YLT_REFL(bar, id, oh, no);
 struct gua : Base {
   std::string a = "Hello";
   int b = 1;
@@ -65,7 +65,7 @@ struct gua : Base {
     return a.id == b.id && a.a == b.a && a.b == b.b;
   }
 };
-STRUCT_PACK_REFL(gua, id, a, b);
+YLT_REFL(gua, id, a, b);
 
 struct_pack::expected<std::unique_ptr<Base>, struct_pack::err_code>
 Base::deserialize(std::string_view sv) {
@@ -167,4 +167,55 @@ TEST_CASE("test unique_ptr<Base> with virtual base") {
   auto res2 = struct_pack::deserialize<std::unique_ptr<base>>(buffer2);
   CHECK(res2);
   CHECK(res2.value()->get_name() == std::make_unique<derived4>()->get_name());
+}
+
+namespace derived_class_contain_another_derived_class {
+
+struct base {
+  virtual uint32_t get_struct_pack_id() const = 0;
+  virtual std::string get_name() const = 0;
+  static std::unique_ptr<base> deserialize(std::string& serialized);
+  virtual ~base(){};
+};
+
+struct derived1 : public base {
+  int b;
+  virtual uint32_t get_struct_pack_id() const override;
+  std::string get_name() const override { return "derived1"; }
+};
+YLT_REFL(derived1, b);
+
+struct derived2 : public base {
+  std::string c;
+  std::unique_ptr<derived1> child;
+  virtual uint32_t get_struct_pack_id() const override;
+  std::string get_name() const override { return "derived2"; }
+};
+
+YLT_REFL(derived2, c, child);
+
+STRUCT_PACK_DERIVED_IMPL(base, derived1, derived2);
+
+std::unique_ptr<base> base::deserialize(std::string& serialized) {
+  return struct_pack::deserialize_derived_class<base, derived1, derived2>(
+             serialized)
+      .value();
+}
+
+}  // namespace derived_class_contain_another_derived_class
+
+TEST_CASE("test derived class contain by other derived class") {
+  using namespace derived_class_contain_another_derived_class;
+  {
+    auto serialized = struct_pack::serialize<std::string>(derived1{});
+    auto x = base::deserialize(serialized);
+    REQUIRE(x);
+    CHECK(x->get_name() == "derived1");
+  }
+  {
+    auto serialized = struct_pack::serialize<std::string>(derived2{});
+    auto x = base::deserialize(serialized);
+    REQUIRE(x);
+    CHECK(x->get_name() == "derived2");
+  }
 }
