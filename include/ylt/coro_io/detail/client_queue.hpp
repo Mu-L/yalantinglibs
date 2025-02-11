@@ -18,6 +18,7 @@
 
 #include "ylt/util/concurrentqueue.h"
 namespace coro_io::detail {
+using namespace ylt::detail;
 template <typename client_t>
 class client_queue {
   moodycamel::ConcurrentQueue<client_t> queue_[2];
@@ -79,6 +80,7 @@ class client_queue {
     if (size_[index]) {
       std::size_t result =
           queue_[index].try_dequeue_bulk(fake_iter{}, max_clear_cnt);
+
       size_[index] -= result;
       return result;
     }

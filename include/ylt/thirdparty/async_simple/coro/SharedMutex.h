@@ -13,13 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef ASYNC_SIMPLE_USE_MODULES
 #include <cassert>
 #include <climits>
 
 #include "async_simple/coro/ConditionVariable.h"
 #include "async_simple/coro/Lazy.h"
-#include "async_simple/coro/Mutex.h"
 #include "async_simple/coro/SpinLock.h"
+
+#endif  // ASYNC_SIMPLE_USE_MODULES
+
 namespace async_simple::coro {
 
 template <typename Lock>
@@ -63,10 +66,10 @@ class SharedMutexBase {
     static constexpr unsigned max_readers = ~write_entered_flag;
 
     // Test whether the write-entered flag is set. mut_ must be locked.
-    bool write_entered() const { return state_ & write_entered_flag; }
+    bool write_entered() const noexcept { return state_ & write_entered_flag; }
 
     // The number of reader locks currently held. mut_ must be locked.
-    unsigned readers() const { return state_ & max_readers; }
+    unsigned readers() const noexcept { return state_ & max_readers; }
 
 public:
     template <typename... Args>
@@ -83,11 +86,14 @@ public:
     async_simple::coro::Lazy<> coLock() noexcept {
         auto scoper = co_await mut_.coScopedLock();
         // Wait until we can set the write-entered flag.
-
-        co_await gate1_.wait(mut_, [this] { return !write_entered(); });
+        if (write_entered()) {
+            co_await gate1_.wait(mut_, [this] { return !write_entered(); });
+        }
         state_ |= write_entered_flag;
         // Then wait until there are no more readers.
-        co_await gate2_.wait(mut_, [this] { return readers() == 0; });
+        if (readers() != 0) {
+            co_await gate2_.wait(mut_, [this] { return readers() == 0; });
+        }
     }
 
     bool tryLock() noexcept {
@@ -115,7 +121,9 @@ public:
 
     async_simple::coro::Lazy<void> coLockShared() {
         auto scoper = co_await mut_.coScopedLock();
-        co_await gate1_.wait(mut_, [this] { return state_ < max_readers; });
+        if (state_ >= max_readers) {
+            co_await gate1_.wait(mut_, [this] { return state_ < max_readers; });
+        }
         ++state_;
     }
 

@@ -23,7 +23,10 @@
 #ifndef ASYNC_SIMPLE_UTHREAD_INTERNAL_UTHREAD_IMPL_H
 #define ASYNC_SIMPLE_UTHREAD_INTERNAL_UTHREAD_IMPL_H
 
+#ifndef ASYNC_SIMPLE_USE_MODULES
 #include "async_simple/Common.h"
+
+#endif  // ASYNC_SIMPLE_USE_MODULES
 
 namespace async_simple {
 namespace uthread {
@@ -49,7 +52,6 @@ struct jmp_buf_link {
 #ifdef AS_INTERNAL_USE_ASAN
     const void* asan_stack_bottom = nullptr;
     std::size_t asan_stack_size = 0;
-    void* asan_fake_stack = nullptr;
 #endif
 
 public:

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #pragma once
+#include <atomic>
 #include <functional>
 #include <string_view>
 #include <utility>
@@ -75,7 +76,9 @@ class logger {
     enable_console_ = enable_console;
   }
 
-  bool check_severity(Severity severity) { return severity >= min_severity_; }
+  bool check_severity(Severity severity) {
+    return severity >= min_severity_.load(std::memory_order::relaxed);
+  }
 
   void add_appender(std::function<void(std::string_view)> fn) {
     appenders_.emplace_back(std::move(fn));
@@ -85,7 +88,9 @@ class logger {
 
   // set and get
   void set_min_severity(Severity severity) { min_severity_ = severity; }
-  Severity get_min_severity() { return min_severity_; }
+  Severity get_min_severity() {
+    return min_severity_.load(std::memory_order::relaxed);
+  }
 
   void set_console(bool enable) {
     enable_console_ = enable;
@@ -122,7 +127,7 @@ class logger {
     }
   }
 
-  Severity min_severity_ =
+  std::atomic<Severity> min_severity_ =
 #if NDEBUG
       Severity::WARN;
 #else
@@ -231,7 +236,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 
 #if __has_include(<fmt/format.h>) || __has_include(<format>)
 
-#define ELOGFMT_IMPL0(severity, Id, prefix, format_str, ...)          \
+#define ELOGFMT_IMPL0(severity, Id, prefix, ...)                      \
   if (!easylog::logger<Id>::instance().check_severity(severity)) {    \
     ;                                                                 \
   }                                                                   \
@@ -239,7 +244,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
     easylog::logger<Id>::instance() +=                                \
         easylog::record_t(std::chrono::system_clock::now(), severity, \
                           GET_STRING(__FILE__, __LINE__))             \
-            .format(prefix::format(format_str, __VA_ARGS__));         \
+            .format(prefix::format(__VA_ARGS__));                     \
     if constexpr (severity == easylog::Severity::CRITICAL) {          \
       easylog::flush<Id>();                                           \
       std::exit(EXIT_FAILURE);                                        \
@@ -288,7 +293,7 @@ inline void add_appender(std::function<void(std::string_view)> fn) {
 #endif
 
 #ifndef MELOG_TRACE
-#define MELOG_TRACE(id) ELOG(INFO, id)
+#define MELOG_TRACE(id) ELOG(TRACE, id)
 #endif
 #ifndef MELOG_DEBUG
 #define MELOG_DEBUG(id) ELOG(DEBUG, id)

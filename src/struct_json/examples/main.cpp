@@ -1,8 +1,12 @@
 #include <cassert>
+#include <iguana/json_reader.hpp>
+#include <iguana/json_writer.hpp>
 #include <iostream>
 
 #include "ylt/struct_json/json_reader.h"
 #include "ylt/struct_json/json_writer.h"
+
+void test_user_defined_struct();
 
 struct person {
   std::string name;
@@ -13,7 +17,7 @@ bool operator==(const person& a, const person& b) {
   return a.name == b.name && a.age == b.age;
 }
 
-REFLECTION(person, name, age);
+YLT_REFL(person, name, age);
 
 class some_object {
   int id;
@@ -24,7 +28,7 @@ class some_object {
   some_object(int i, std::string str) : id(i), name(str) {}
   int get_id() const { return id; }
   std::string get_name() const { return name; }
-  REFLECTION(some_object, id, name);
+  YLT_REFL(some_object, id, name);
 };
 
 void test_inner_object() {
@@ -37,13 +41,31 @@ void test_inner_object() {
   iguana::from_json(obj1, str);
   assert(obj1.get_id() == 20);
   assert(obj1.get_name() == "tom");
+
+#if __cplusplus > 201703L
+#if __has_include(<span>)
+  {
+    std::vector<int> v{1, 2};
+    std::span<int> span(v.data(), v.data() + 2);
+    std::string str;
+    iguana::to_json(span, str);
+
+    std::vector<int> v1;
+    v1.resize(2);
+    std::span<int> span1(v1.data(), v1.data() + 2);
+
+    iguana::from_json(span1, str);
+    assert(v == v1);
+  }
+#endif
+#endif
 }
 
 struct person1 {
   std::shared_ptr<std::string> name;
   std::unique_ptr<int64_t> age;
 };
-REFLECTION(person1, name, age);
+YLT_REFL(person1, name, age);
 
 void use_smart_pointer() {
   person1 p{std::make_shared<std::string>("tom"),
@@ -59,6 +81,7 @@ void use_smart_pointer() {
 }
 
 void test_escape_serialize() {
+#ifdef __linux__
   person p{"老\t人", 20};
   std::string ss;
   struct_json::to_json(p, ss);
@@ -66,6 +89,23 @@ void test_escape_serialize() {
   person p1;
   struct_json::from_json(p1, ss);
   assert(p1.name == p.name);
+#endif
+}
+
+struct test_optstr_reader_null {
+  std::optional<std::string> name;
+};
+YLT_REFL(test_optstr_reader_null, name);
+
+void test_optional() {
+  test_optstr_reader_null v;
+  v.name = "name";  // optional<string> begin with 'n'
+  std::string json;
+  iguana::to_json(v, json);
+
+  test_optstr_reader_null v1;
+  iguana::from_json(v1, json);
+  assert(v.name == v1.name);
 }
 
 int main() {
@@ -90,4 +130,6 @@ int main() {
   test_inner_object();
   use_smart_pointer();
   test_escape_serialize();
+  test_user_defined_struct();
+  test_optional();
 }

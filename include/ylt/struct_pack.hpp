@@ -48,26 +48,6 @@
 #endif
 
 namespace struct_pack {
-
-#if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
-template <class T, class E>
-using expected = std::expected<T, E>;
-
-template <class T>
-using unexpected = std::unexpected<T>;
-
-using unexpect_t = std::unexpect_t;
-
-#else
-template <class T, class E>
-using expected = tl::expected<T, E>;
-
-template <class T>
-using unexpected = tl::unexpected<T>;
-
-using unexpect_t = tl::unexpect_t;
-#endif
-
 inline std::error_code make_error_code(struct_pack::errc err) {
   return std::error_code(static_cast<int>(err),
                          struct_pack::detail::category());
@@ -398,6 +378,8 @@ template <
     typename = std::enable_if_t<struct_pack::detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] auto deserialize(const View &v) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to(ret.value(), v);
   if SP_UNLIKELY (errc) {
@@ -408,6 +390,8 @@ template <
 
 template <typename... Args>
 [[nodiscard]] auto deserialize(const char *data, size_t size) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   if (auto errc = deserialize_to(ret.value(), data, size); errc) {
     ret = unexpected<struct_pack::err_code>{errc};
@@ -421,6 +405,8 @@ template <typename... Args, typename Reader,
           typename = std::enable_if_t<struct_pack::reader_t<Reader>>>
 #endif
 [[nodiscard]] auto deserialize(Reader &v) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to(ret.value(), v);
   if SP_UNLIKELY (errc) {
@@ -435,6 +421,8 @@ template <typename... Args, struct_pack::detail::deserialize_view View>
 template <typename... Args, typename View>
 #endif
 [[nodiscard]] auto deserialize(const View &v, size_t &consume_len) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to(ret.value(), v, consume_len);
   if SP_UNLIKELY (errc) {
@@ -446,6 +434,8 @@ template <typename... Args, typename View>
 template <typename... Args>
 [[nodiscard]] auto deserialize(const char *data, size_t size,
                                size_t &consume_len) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to(ret.value(), data, size, consume_len);
   if SP_UNLIKELY (errc) {
@@ -463,6 +453,8 @@ template <
     typename = std::enable_if_t<struct_pack::detail::deserialize_view<View>>>
 #endif
 [[nodiscard]] auto deserialize(const View &v) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to<conf>(ret.value(), v);
   if SP_UNLIKELY (errc) {
@@ -487,6 +479,8 @@ template <uint64_t conf, typename... Args, typename Reader,
           typename = std::enable_if_t<struct_pack::reader_t<Reader>>>
 #endif
 [[nodiscard]] auto deserialize(Reader &v) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to<conf>(ret.value(), v);
   if SP_UNLIKELY (errc) {
@@ -502,6 +496,8 @@ template <uint64_t conf, typename... Args,
 template <uint64_t conf, typename... Args, typename View>
 #endif
 [[nodiscard]] auto deserialize(const View &v, size_t &consume_len) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to<conf>(ret.value(), v, consume_len);
   if SP_UNLIKELY (errc) {
@@ -513,6 +509,8 @@ template <uint64_t conf, typename... Args, typename View>
 template <uint64_t conf, typename... Args>
 [[nodiscard]] auto deserialize(const char *data, size_t size,
                                size_t &consume_len) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to<conf>(ret.value(), data, size, consume_len);
   if SP_UNLIKELY (errc) {
@@ -527,6 +525,8 @@ template <typename... Args, struct_pack::detail::deserialize_view View>
 template <typename... Args, typename View>
 #endif
 [[nodiscard]] auto deserialize_with_offset(const View &v, size_t &offset) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to_with_offset(ret.value(), v, offset);
   if SP_UNLIKELY (errc) {
@@ -538,6 +538,8 @@ template <typename... Args, typename View>
 template <typename... Args>
 [[nodiscard]] auto deserialize_with_offset(const char *data, size_t size,
                                            size_t &offset) {
+  static_assert(sizeof...(Args) > 0,
+                "the correct code is struct_pack::deserialize<Type...>();");
   expected<detail::get_args_type<Args...>, struct_pack::err_code> ret;
   auto errc = deserialize_to_with_offset(ret.value(), data, size, offset);
   if SP_UNLIKELY (errc) {

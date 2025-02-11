@@ -25,26 +25,12 @@
 #endif
 
 namespace coro_rpc {
-#if __cpp_lib_expected >= 202202L && __cplusplus > 202002L
-template <class T, class E>
-using expected = std::expected<T, E>;
 
-template <class T>
-using unexpected = std::unexpected<T>;
+namespace protocol {
+struct coro_rpc_protocol;
+}
 
-using unexpect_t = std::unexpect_t;
-
-#else
-template <class T, class E>
-using expected = tl::expected<T, E>;
-
-template <class T>
-using unexpected = tl::unexpected<T>;
-
-using unexpect_t = tl::unexpect_t;
-#endif
-
-template <typename T, typename rpc_protocol>
-using rpc_result = expected<T, typename rpc_protocol::rpc_error>;
+template <typename T>
+using rpc_result = expected<T, coro_rpc::rpc_error>;
 
 }  // namespace coro_rpc

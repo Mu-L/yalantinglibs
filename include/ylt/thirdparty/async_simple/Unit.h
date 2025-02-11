@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,6 @@
 #ifndef ASYNC_SIMPLE_UNIT_H
 #define ASYNC_SIMPLE_UNIT_H
 
-#include <exception>
-
-#include "async_simple/Common.h"
-#include "async_simple/Try.h"
-
 namespace async_simple {
 
 // Unit plays the role of a simplest type in case we couldn't
@@ -28,8 +23,8 @@ namespace async_simple {
 //
 // User shouldn't use this directly.
 struct Unit {
-  constexpr bool operator==(const Unit&) const { return true; }
-  constexpr bool operator!=(const Unit&) const { return false; }
+    constexpr bool operator==(const Unit&) const { return true; }
+    constexpr bool operator!=(const Unit&) const { return false; }
 };
 
 }  // namespace async_simple

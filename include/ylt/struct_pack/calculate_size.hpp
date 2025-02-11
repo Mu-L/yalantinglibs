@@ -97,7 +97,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (optional<type>) {
+  else if constexpr (ylt::reflection::optional<type>) {
     ret.total = sizeof(char);
     if (item) {
       ret += calculate_one_size(*item);
@@ -115,9 +115,10 @@ constexpr size_info inline calculate_one_size(const T &item) {
           throw std::runtime_error{
               "illegal struct_pack_id in virtual function."};
         }
-        ret += template_switch<calculate_one_size_derived_class_helper<
-            derived_class_set_t<typename type::element_type>>>(index,
-                                                               item.get());
+        ret += ylt::reflection::template_switch<
+            calculate_one_size_derived_class_helper<
+                derived_class_set_t<typename type::element_type>>>(index,
+                                                                   item.get());
       }
       else {
         ret += calculate_one_size(*item);
@@ -132,7 +133,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
         },
         item);
   }
-  else if constexpr (expected<type>) {
+  else if constexpr (ylt::reflection::expected<type>) {
     ret.total = sizeof(bool);
     if (item.has_value()) {
       if constexpr (!std::is_same_v<typename type::value_type, void>)
@@ -147,7 +148,7 @@ constexpr size_info inline calculate_one_size(const T &item) {
       if constexpr (!user_defined_refl<type>)
         static_assert(std::is_aggregate_v<remove_cvref_t<type>>,
                       "struct_pack only support aggregated type, or you should "
-                      "add macro STRUCT_PACK_REFL(Type,field1,field2...)");
+                      "add macro YLT_REFL(Type,field1,field2...)");
     }
     if constexpr (is_trivial_serializable<type>::value) {
       ret.total = sizeof(type);
@@ -422,15 +423,15 @@ get_serialize_runtime_info(const Args &...args) {
     ret.len_ += sz_info.total;
   }
   else {
-    if SP_LIKELY (sz_info.max_size < (int64_t{1} << 8)) {
+    if SP_LIKELY (sz_info.max_size < (uint64_t{1} << 8)) {
       ret.len_ += sz_info.total + sz_info.size_cnt;
     }
     else {
-      if (sz_info.max_size < (int64_t{1} << 16)) {
+      if (sz_info.max_size < (uint64_t{1} << 16)) {
         ret.len_ += sz_info.total + sz_info.size_cnt * 2;
         ret.metainfo_ = 0b01000;
       }
-      else if (sz_info.max_size < (int64_t{1} << 32)) {
+      else if (sz_info.max_size < (uint64_t{1} << 32)) {
         ret.len_ += sz_info.total + sz_info.size_cnt * 4;
         ret.metainfo_ = 0b10000;
       }

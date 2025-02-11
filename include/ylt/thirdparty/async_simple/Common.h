@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Alibaba Group Holding Limited;
+ * Copyright (c) 2022, Alibaba Group Holding Limited;
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,33 +16,11 @@
 #ifndef ASYNC_SIMPLE_COMMON_H
 #define ASYNC_SIMPLE_COMMON_H
 
+#ifndef ASYNC_SIMPLE_USE_MODULES
 #include <stdexcept>
+#include "async_simple/CommonMacros.h"
 
-#if __has_cpp_attribute(likely) && __has_cpp_attribute(unlikely)
-#define AS_LIKELY [[likely]]
-#define AS_UNLIKELY [[unlikely]]
-#else
-#define AS_LIKELY
-#define AS_UNLIKELY
-#endif
-
-#ifdef _WIN32
-#define AS_INLINE
-#else
-#define AS_INLINE __attribute__((__always_inline__)) inline
-#endif
-
-#ifdef __clang__
-#if __has_feature(address_sanitizer)
-#define AS_INTERNAL_USE_ASAN 1
-#endif  // __has_feature(address_sanitizer)
-#endif  // __clang__
-
-#ifdef __GNUC__
-#ifdef __SANITIZE_ADDRESS__  // GCC
-#define AS_INTERNAL_USE_ASAN 1
-#endif  // __SANITIZE_ADDRESS__
-#endif  // __GNUC__
+#endif  // ASYNC_SIMPLE_USE_MODULES
 
 namespace async_simple {
 // Different from assert, logicAssert is meaningful in
@@ -52,9 +30,9 @@ namespace async_simple {
 // a bug in the library. If logicAssert fails, it means
 // there is a bug in the user code.
 inline void logicAssert(bool x, const char* errorMsg) {
-  if (x)
-    AS_LIKELY { return; }
-  throw std::logic_error(errorMsg);
+    if (x)
+        AS_LIKELY { return; }
+    throw std::logic_error(errorMsg);
 }
 
 }  // namespace async_simple
